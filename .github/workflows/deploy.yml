@@ -1,0 +1,77 @@
+name: FundIt CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # ─── Job 1: Deploy Backend to Render ──────────────────────────
+  deploy-backend:
+    name: Deploy Backend (Render)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          npm install
+
+      - name: Trigger Render deploy hook
+        run: |
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" \
+            -H "Content-Type: application/json" \
+            --fail \
+            --retry 3 \
+            --retry-delay 5
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+
+      - name: Backend deploy triggered
+        run: echo "✅ Backend deploy hook triggered on Render successfully."
+
+  # ─── Job 2: Deploy Frontend to Vercel ─────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend (Vercel)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Deploy to Vercel (Production)
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: ./frontend
+          vercel-args: '--prod'
+        env:
+          REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
+          REACT_APP_RAZORPAY_KEY: ${{ secrets.REACT_APP_RAZORPAY_KEY }}
+
+      - name: Frontend deploy complete
+        run: echo "✅ Frontend deployed to Vercel production successfully."
